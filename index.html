@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JoViCo Travel IA | Planificador Inteligente de Viajes con RAG</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- PapaParse CDN para procesamiento CSV local -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Configuración de Tema y Colores Corporativos (Azul Oscuro - JoViCo) -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#1E3A8A', // Azul Oscuro / Navy
+              dark: '#172554',    // Azul Noche Profundo
+              light: '#2563EB',   // Azul Real
+              50: '#EFF6FF',      // Tinte suave
+              100: '#DBEAFE',     // Borde suave
+              200: '#BFDBFE'      // Borde acentuado
+            },
+            neutralDark: '#1E293B',
+            neutralBg: '#F8FAFC'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Estilos personalizados y utilidades de scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #1E3A8A;
+    }
+    .badge-chip {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .badge-chip.active {
+      background-color: #1E3A8A;
+      color: #ffffff;
+      border-color: #1E3A8A;
+      box-shadow: 0 2px 8px rgba(30, 58, 138, 0.25);
+    }
+  </style>
+</head>
+<body class="bg-[#F8FAFC] text-[#1E293B] min-h-screen flex flex-col font-sans antialiased selection:bg-brand-100 selection:text-brand">
+
+  <!-- ==================== HEADER / NAVBAR ==================== -->
+  <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-brand flex items-center justify-center text-white shadow-md shadow-brand/20">
+          <i data-lucide="compass" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <span class="text-xl font-bold tracking-tight text-brand">JoViCo <span class="text-neutralDark font-normal">Travel IA</span></span>
+          <span class="hidden sm:inline-block ml-2 px-2 py-0.5 text-xs bg-brand-50 text-brand border border-brand-200 rounded-full font-medium">RAG + CoT Engine</span>
+        </div>
+      </div>
+
+      <!-- Quick Status & Navigation Pill -->
+      <div class="flex items-center space-x-3">
+        <div id="navStatusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+          <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+          <span id="navStatusText">Modo: Simulación (Mock)</span>
+        </div>
+        <a href="#modulo-educativo" class="hidden md:flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-brand transition-colors">
+          <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+          <span>Guía IA</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN CONTENT CONTAINER ==================== -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Subheader descriptivo -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-extrabold text-neutralDark tracking-tight">Planificador Personalizado de Itinerarios</h1>
+      <p class="mt-2 text-sm text-gray-600 max-w-3xl">
+        Experimenta la arquitectura moderna de IA Generativa: recupera conocimiento contextual local mediante <strong class="text-brand">RAG</strong>, inspecciona el ensamblaje de prompts con <strong class="text-brand">Chain-of-Thought</strong> y genera itinerarios hiperdetallados.
+      </p>
+    </div>
+
+    <!-- GRID PRINCIPAL DE 12 COLUMNAS -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      
+      <!-- ================= COLUMNA IZQUIERDA: CONFIGURACIONES Y ENTRADAS (5 COLS) ================= -->
+      <div class="lg:col-span-5 space-y-6">
+
+        <!-- 1. CONFIGURACIÓN DE LLM & API KEY -->
+        <section class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm transition hover:shadow-md">
+          <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="key-round" class="w-5 h-5 text-brand"></i>
+              <h2 class="font-bold text-neutralDark">1. Proveedor y Credenciales</h2>
+            </div>
+            <span id="apiKeyBadge" class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 font-medium border border-gray-200">
+              Sin Clave (Mock Activo)
+            </span>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Modelo de Lenguaje</label>
+              <select id="modelProvider" class="w-full bg-[#F6F6F6] border border-gray-300 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand transition">
+                <option value="gemini-1.5-flash">Google Gemini 1.5 Flash (Recomendado)</option>
+                <option value="gpt-4o-mini">OpenAI GPT-4o-mini</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-xs font-semibold text-gray-700 uppercase tracking-wider">API Key (Opcional)</label>
+                <span class="text-[11px] text-gray-400">Se ejecuta 100% en tu navegador</span>
+              </div>
+              <div class="relative">
+                <input 
+                  type="password" 
+                  id="apiKeyInput" 
+                  placeholder="AIzaSy... o sk-proj-..." 
+                  class="w-full bg-[#F6F6F6] border border-gray-300 text-sm rounded-xl px-3 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand transition font-mono"
+                >
+                <button type="button" id="toggleApiKeyVisibility" class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
+                  <i data-lucide="eye" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <p class="text-[11px] text-gray-500 mt-1.5">
+                💡 Si no proporcionas una clave, el sistema activará automáticamente el <strong>Modo Simulación (Mock Engine)</strong> que emula la respuesta JSON con base en el contexto RAG.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. PREFERENCIAS DEL VIAJERO -->
+        <section class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm transition hover:shadow-md">
+          <div class="flex items-center space-x-2 pb-3 border-b border-gray-100 mb-4">
+            <i data-lucide="map-pin" class="w-5 h-5 text-brand"></i>
+            <h2 class="font-bold text-neutralDark">2. Preferencias del Viajero</h2>
+          </div>
+
+          <div class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Destino Principal</label>
+                <input 
+                  type="text" 
+                  id="travelDestination" 
+                  value="Cusco" 
+                  placeholder="Ej: Cusco, Kioto, París..." 
+                  class="w-full bg-[#F6F6F6] border border-gray-300 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand transition"
+                >
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Duración (Días)</label>
+                <input 
+                  type="number" 
+                  id="travelDays" 
+                  value="3" 
+                  min="1" 
+                  max="7" 
+                  class="w-full bg-[#F6F6F6] border border-gray-300 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand transition"
+                >
+              </div>
+            </div>
+
+            <!-- Presupuesto -->
+            <div>
+              <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Nivel de Presupuesto</label>
+              <div class="grid grid-cols-3 gap-2" id="budgetSelector">
+                <button type="button" data-budget="Económico" class="budget-btn border border-gray-200 rounded-xl py-2 px-3 text-xs font-medium text-center text-gray-700 hover:border-brand hover:bg-brand-50 transition">
+                  🌱 Económico
+                </button>
+                <button type="button" data-budget="Moderado" class="budget-btn active border border-brand bg-brand text-white rounded-xl py-2 px-3 text-xs font-medium text-center shadow-sm">
+                  ⚖️ Moderado
+                </button>
+                <button type="button" data-budget="Lujo" class="budget-btn border border-gray-200 rounded-xl py-2 px-3 text-xs font-medium text-center text-gray-700 hover:border-brand hover:bg-brand-50 transition">
+                  💎 Lujo
+                </button>
+              </div>
+            </div>
+
+            <!-- Intereses Múltiples -->
+            <div>
+              <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Intereses (Selección múltiple)</label>
+              <div class="flex flex-wrap gap-1.5" id="interestsContainer">
+                <button type="button" class="badge-chip active px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 bg-white" data-interest="Cultura e Historia">🏛️ Cultura e Historia</button>
+                <button type="button" class="badge-chip active px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 bg-white" data-interest="Gastronomía">🍷 Gastronomía</button>
+                <button type="button" class="badge-chip px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 bg-white" data-interest="Aventura y Trekking">🥾 Aventura</button>
+                <button type="button" class="badge-chip px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 bg-white" data-interest="Naturaleza y Paisajes">🌿 Naturaleza</button>
+                <button type="button" class="badge-chip px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 bg-white" data-interest="Relax y Bienestar">🧘 Relax</button>
+                <button type="button" class="badge-chip px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 bg-white" data-interest="Vida Nocturna">🌙 Vida Nocturna</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. MÓDULO RAG LOCAL (CSV) -->
+        <section class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm transition hover:shadow-md">
+          <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="database" class="w-5 h-5 text-brand"></i>
+              <h2 class="font-bold text-neutralDark">3. Módulo RAG Local</h2>
+            </div>
+            <span id="ragRecordCount" class="text-xs font-mono font-medium px-2 py-0.5 rounded-full bg-brand-50 text-brand border border-brand-200">
+              0 registros
+            </span>
+          </div>
+
+          <p class="text-xs text-gray-600 mb-3">
+            Carga un archivo CSV con destinos turísticos locales. El algoritmo RAG buscará coincidencias léxicas/semánticas para contextualizar el prompt.
+          </p>
+
+          <!-- Dropzone -->
+          <div 
+            id="csvDropzone" 
+            class="border-2 border-dashed border-gray-300 hover:border-brand bg-[#F6F6F6] rounded-xl p-5 text-center cursor-pointer transition flex flex-col items-center justify-center space-y-2 group"
+          >
+            <input type="file" id="csvFileInput" accept=".csv" class="hidden">
+            <div class="w-10 h-10 rounded-full bg-brand-50 text-brand flex items-center justify-center group-hover:scale-110 transition-transform">
+              <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
+            </div>
+            <div class="text-xs text-gray-600">
+              <span class="font-semibold text-brand">Haz clic para subir un CSV</span> o arrástralo aquí
+            </div>
+            <span class="text-[10px] text-gray-400">Columnas recomendadas: Destino, NombreLugar, Categoria, Descripcion, CostoEstimadoUSD, Horario</span>
+          </div>
+
+          <!-- Botón de Carga de CSV de Ejemplo -->
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <button 
+              type="button" 
+              id="btnLoadSampleCsv" 
+              class="w-full py-2 px-3 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-brand-50 hover:text-brand border border-gray-200 transition flex items-center justify-center gap-1.5 text-gray-700"
+            >
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-brand"></i>
+              <span>Cargar CSV de prueba (Cusco, Kioto, París)</span>
+            </button>
+          </div>
+
+          <!-- Fragmentos Recuperados Transparencia -->
+          <div class="mt-4 pt-3 border-t border-gray-100">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-neutralDark flex items-center gap-1">
+                <i data-lucide="layers" class="w-3.5 h-3.5 text-brand"></i> Fragmentos RAG Recuperados:
+              </span>
+              <span id="chunksRetrievedBadge" class="text-[11px] font-mono text-gray-500">0 encontrados</span>
+            </div>
+            <div id="retrievedChunksPreview" class="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+              <div class="text-xs text-gray-400 italic py-2 text-center bg-[#F6F6F6] rounded-lg border border-dashed border-gray-200">
+                Escribe un destino y carga un CSV para ver los fragmentos recuperados en tiempo real.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- BOTÓN PRINCIPAL DE GENERACIÓN -->
+        <button 
+          id="btnGenerateItinerary" 
+          class="w-full py-4 px-6 bg-brand hover:bg-brand-dark active:scale-[0.99] text-white font-bold rounded-2xl shadow-lg shadow-brand/25 transition duration-200 flex items-center justify-center gap-3 text-base group"
+        >
+          <i data-lucide="sparkles" class="w-5 h-5 group-hover:rotate-12 transition-transform"></i>
+          <span>Generar Itinerario Personalizado</span>
+          <div id="loadingSpinner" class="hidden animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+        </button>
+
+      </div>
+
+
+      <!-- ================= COLUMNA DERECHA: SALIDAS & PROMPT INSPECTOR (7 COLS) ================= -->
+      <div class="lg:col-span-7 space-y-6">
+
+        <!-- NAVEGACIÓN POR PESTAÑAS (TABS) -->
+        <div class="bg-white rounded-2xl border border-gray-200 p-1.5 flex gap-1 shadow-sm">
+          <button id="tabItineraryBtn" class="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition bg-brand text-white shadow-sm">
+            <i data-lucide="calendar" class="w-4 h-4"></i>
+            <span>Itinerario Generado</span>
+          </button>
+          <button id="tabPromptBtn" class="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition text-gray-600 hover:text-brand hover:bg-brand-50">
+            <i data-lucide="terminal" class="w-4 h-4"></i>
+            <span>Constructor de Prompts (CoT)</span>
+          </button>
+        </div>
+
+        <!-- ================= PANEL 1: ITINERARIO GENERADO ================= -->
+        <div id="panelItinerary" class="space-y-6">
+          
+          <!-- Estado Inicial / Vacío -->
+          <div id="emptyStateContainer" class="bg-white rounded-2xl p-10 border border-gray-200 text-center shadow-sm flex flex-col items-center justify-center">
+            <div class="w-16 h-16 rounded-full bg-brand-50 text-brand flex items-center justify-center mb-4">
+              <i data-lucide="map" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-lg font-bold text-neutralDark">Ningún itinerario generado aún</h3>
+            <p class="text-sm text-gray-500 max-w-md mt-1 mb-6">
+              Configura tus preferencias, carga el CSV turístico y presiona el botón <span class="font-semibold text-brand">"Generar Itinerario Personalizado"</span>.
+            </p>
+            <button id="btnQuickDemo" class="text-xs font-semibold px-4 py-2 bg-brand-50 text-brand rounded-xl border border-brand-200 hover:bg-brand hover:text-white transition">
+              ✨ Ejecutar Demostración Rápida con Datos de Prueba
+            </button>
+          </div>
+
+          <!-- Contenedor del Itinerario Renderizado (Oculto inicialmente) -->
+          <div id="itineraryResultContainer" class="hidden space-y-6">
+            
+            <!-- Resumen y Encabezado del Viaje -->
+            <div class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm relative overflow-hidden">
+              <div class="absolute top-0 right-0 w-32 h-32 bg-brand-50 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+              <div class="flex flex-wrap items-center justify-between gap-4 mb-3">
+                <div>
+                  <span class="text-xs uppercase font-extrabold tracking-wider text-brand">Itinerario Inteligente</span>
+                  <h2 id="itineraryDestinationTitle" class="text-2xl font-black text-neutralDark">Cusco Mágico</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span id="itineraryBudgetBadge" class="text-xs px-3 py-1 rounded-full font-bold bg-green-50 text-green-700 border border-green-200">Moderado</span>
+                  <button id="btnPrintItinerary" class="p-2 text-gray-500 hover:text-brand hover:bg-gray-100 rounded-lg transition" title="Imprimir / Exportar">
+                    <i data-lucide="printer" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              </div>
+
+              <p id="itinerarySummaryText" class="text-sm text-gray-600 leading-relaxed">
+                Itinerario optimizado geográficamente y adaptado a tus intereses con validación contextual vía RAG.
+              </p>
+
+              <!-- Métricas Rápidas -->
+              <div class="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100 text-center">
+                <div class="p-2 rounded-xl bg-[#F6F6F6]">
+                  <span class="block text-[11px] text-gray-500 uppercase font-bold">Duración</span>
+                  <span id="itineraryDaysCount" class="text-base font-extrabold text-neutralDark">3 Días</span>
+                </div>
+                <div class="p-2 rounded-xl bg-[#F6F6F6]">
+                  <span class="block text-[11px] text-gray-500 uppercase font-bold">Costo Aprox.</span>
+                  <span id="itineraryTotalCost" class="text-base font-extrabold text-brand">$280 USD</span>
+                </div>
+                <div class="p-2 rounded-xl bg-[#F6F6F6]">
+                  <span class="block text-[11px] text-gray-500 uppercase font-bold">RAG Enriquecido</span>
+                  <span id="itineraryRagHits" class="text-base font-extrabold text-blue-700">4 fuentes</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Lista de Tarjetas por Día -->
+            <div id="itineraryDaysList" class="space-y-4">
+              <!-- Renderizado dinámico vía JavaScript -->
+            </div>
+
+            <!-- Recomendaciones Clave & Tips Locales -->
+            <div class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+              <div class="flex items-center space-x-2 mb-3">
+                <i data-lucide="lightbulb" class="w-5 h-5 text-amber-500"></i>
+                <h3 class="font-bold text-neutralDark">Recomendaciones Clave & Tips Locales</h3>
+              </div>
+              <ul id="itineraryTipsList" class="space-y-2 text-xs text-gray-600 list-disc list-inside">
+                <!-- Items dinámicos -->
+              </ul>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ================= PANEL 2: CONSTRUCTOR DINÁMICO DE PROMPTS (COT) ================= -->
+        <div id="panelPrompt" class="hidden space-y-4">
+          <div class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="code-xml" class="w-5 h-5 text-brand"></i>
+                <h2 class="font-bold text-neutralDark">Prompt Dinámico Ensamblado en Tiempo Real</h2>
+              </div>
+              <button id="btnCopyPrompt" class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-brand-50 hover:text-brand transition text-gray-700">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>Copiar Prompt</span>
+              </button>
+            </div>
+
+            <p class="text-xs text-gray-500 mb-3">
+              Este es el prompt estructurado exacto enviado al modelo. Combina el <strong>System Prompt</strong>, la <strong>inyección de fragmentos RAG</strong> y la técnica <strong>Chain-of-Thought (CoT)</strong> para forzar un razonamiento paso a paso antes del JSON final.
+            </p>
+
+            <!-- Prompt Preview Box -->
+            <div class="relative">
+              <pre id="promptLiveDisplay" class="bg-[#0B1528] text-sky-200 p-4 rounded-xl text-xs font-mono overflow-x-auto max-h-[500px] leading-relaxed border border-blue-900/60 selection:bg-brand selection:text-white"></pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- ==================== SECCIÓN 7: PANEL EDUCATIVO ==================== -->
+    <section id="modulo-educativo" class="mt-16 pt-10 border-t border-gray-200">
+      <div class="text-center max-w-3xl mx-auto mb-10">
+        <span class="text-xs font-extrabold uppercase tracking-widest text-brand bg-brand-50 px-3 py-1 rounded-full border border-brand-200">Zona Pedagógica</span>
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-neutralDark mt-2">Fundamentos de IA Generativa en Producción</h2>
+        <p class="text-sm text-gray-600 mt-2">
+          Comprende las diferencias esenciales, costos y casos de uso entre las tres estrategias fundamentales para adaptar Modelos de Lenguaje (LLMs).
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Tarjeta 1: Prompt Engineering & CoT -->
+        <div class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:border-brand/40 transition duration-300 flex flex-col justify-between">
+          <div>
+            <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
+              <i data-lucide="message-square-code" class="w-5 h-5"></i>
+            </div>
+            <h3 class="text-lg font-bold text-neutralDark">1. Prompt Engineering & CoT</h3>
+            <span class="text-[11px] font-semibold text-blue-600 uppercase tracking-wider block mb-2">Ingeniería de Instrucciones</span>
+            <p class="text-xs text-gray-600 leading-relaxed mb-4">
+              Consiste en diseñar directivas claras, delimitadores, roles y técnicas de razonamiento explícito como <strong>Chain-of-Thought (CoT)</strong> para guiar la inferencia sin alterar los pesos del modelo.
+            </p>
+            <div class="bg-[#F6F6F6] rounded-xl p-3 text-xs space-y-1.5 mb-4 text-gray-700">
+              <div class="flex items-center gap-1.5 font-semibold text-neutralDark">
+                <i data-lucide="check" class="w-3.5 h-3.5 text-green-600"></i> Ventajas:
+              </div>
+              <p>Sin costo de entrenamiento, implementación instantánea y máxima flexibilidad.</p>
+            </div>
+          </div>
+          <div class="pt-3 border-t border-gray-100 text-[11px] text-gray-500 font-medium">
+            <strong>Cuándo usar:</strong> Tareas generales, formateo estructurado, razonamiento lógico y prototipado rápido.
+          </div>
+        </div>
+
+        <!-- Tarjeta 2: RAG (Retrieval-Augmented Generation) -->
+        <div class="bg-white rounded-2xl p-6 border-2 border-brand/20 shadow-md hover:border-brand transition duration-300 relative flex flex-col justify-between">
+          <span class="absolute -top-3 right-4 bg-brand text-white text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full shadow-sm">
+            Usado en esta App
+          </span>
+          <div>
+            <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand flex items-center justify-center mb-4">
+              <i data-lucide="layers" class="w-5 h-5"></i>
+            </div>
+            <h3 class="text-lg font-bold text-neutralDark">2. RAG (Generación Aumentada)</h3>
+            <span class="text-[11px] font-semibold text-brand uppercase tracking-wider block mb-2">Recuperación + Inferencia</span>
+            <p class="text-xs text-gray-600 leading-relaxed mb-4">
+              Recupera datos precisos de una base de conocimiento externa (CSV, SQL o base vectorial) y los inyecta dinámicamente en la ventana de contexto del LLM antes de formular la respuesta.
+            </p>
+            <div class="bg-[#F6F6F6] rounded-xl p-3 text-xs space-y-1.5 mb-4 text-gray-700">
+              <div class="flex items-center gap-1.5 font-semibold text-neutralDark">
+                <i data-lucide="check" class="w-3.5 h-3.5 text-green-600"></i> Ventajas:
+              </div>
+              <p>Elimina alucinaciones fácticas, cita fuentes verificables y no requiere reentrenar.</p>
+            </div>
+          </div>
+          <div class="pt-3 border-t border-gray-100 text-[11px] text-gray-500 font-medium">
+            <strong>Cuándo usar:</strong> Datos privados, información dinámica, catálogos turísticos o documentos corporativos.
+          </div>
+        </div>
+
+        <!-- Tarjeta 3: Fine-Tuning -->
+        <div class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:border-purple-400/40 transition duration-300 flex flex-col justify-between">
+          <div>
+            <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-4">
+              <i data-lucide="cpu" class="w-5 h-5"></i>
+            </div>
+            <h3 class="text-lg font-bold text-neutralDark">3. Fine-Tuning</h3>
+            <span class="text-[11px] font-semibold text-purple-600 uppercase tracking-wider block mb-2">Ajuste Fino de Pesos</span>
+            <p class="text-xs text-gray-600 leading-relaxed mb-4">
+              Re-entrena supervisadamente los pesos internos de la red neuronal mediante miles de pares de ejemplos (input-output) para que aprenda un estilo, tono o sintaxis altamente especializada.
+            </p>
+            <div class="bg-[#F6F6F6] rounded-xl p-3 text-xs space-y-1.5 mb-4 text-gray-700">
+              <div class="flex items-center gap-1.5 font-semibold text-neutralDark">
+                <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-amber-600"></i> Consideración:
+              </div>
+              <p>No es el método adecuado para enseñar datos fácticos nuevos, sino estilos o formatos fijos.</p>
+            </div>
+          </div>
+          <div class="pt-3 border-t border-gray-100 text-[11px] text-gray-500 font-medium">
+            <strong>Cuándo usar:</strong> Estilo de marca estricto, lenguajes médicos/legales muy técnicos o reducción drástica de tokens.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Cuadro comparativo sintético -->
+      <div class="mt-8 bg-white rounded-2xl p-6 border border-gray-200 shadow-sm overflow-x-auto">
+        <h4 class="text-sm font-bold text-neutralDark mb-4">Matriz Comparativa de Decisión Tecnológica</h4>
+        <table class="w-full text-left text-xs text-gray-600">
+          <thead>
+            <tr class="border-b border-gray-200 text-gray-400 uppercase text-[10px] font-bold">
+              <th class="pb-2">Criterio</th>
+              <th class="pb-2">Prompting / CoT</th>
+              <th class="pb-2 text-brand">RAG (Recuperación)</th>
+              <th class="pb-2">Fine-Tuning</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr>
+              <td class="py-2.5 font-semibold text-neutralDark">Costo y Recursos</td>
+              <td class="py-2.5">Bajo (Solo tokens de inferencia)</td>
+              <td class="py-2.5 font-medium text-brand">Moderado (Base vectorial o parser)</td>
+              <td class="py-2.5">Alto (GPU y curación de datasets)</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 font-semibold text-neutralDark">Actualización del Conocimiento</td>
+              <td class="py-2.5">Limitado a la ventana de contexto</td>
+              <td class="py-2.5 font-medium text-brand">Inmediato (Al actualizar el CSV/BD)</td>
+              <td class="py-2.5">Estático (Requiere nuevo entrenamiento)</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 font-semibold text-neutralDark">Riesgo de Alucinación</td>
+              <td class="py-2.5">Medio a Alto</td>
+              <td class="py-2.5 font-medium text-brand">Muy Bajo (Basado en hechos recuperados)</td>
+              <td class="py-2.5">Medio</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 font-semibold text-neutralDark">Trazabilidad de Respuestas</td>
+              <td class="py-2.5">Nula</td>
+              <td class="py-2.5 font-medium text-brand">Total (Se cita el registro fuente)</td>
+              <td class="py-2.5">Opaca (Ocurre en pesos neuronales)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="bg-white border-t border-gray-200 mt-12 py-6 text-center text-xs text-gray-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center space-x-2">
+        <span class="font-bold text-brand">JoViCo Travel IA</span>
+        <span>— Arquitectura Educativa de Frontend & LLM RAG</span>
+      </div>
+      <div>Paleta Corporativa: <code class="text-brand font-mono font-bold">#1E3A8A (Azul Oscuro)</code> | <code class="font-mono">#F8FAFC</code> | <code class="font-mono">#1E293B</code></div>
+    </div>
+  </footer>
+
+
+  <!-- ==================== LOGICA JAVASCRIPT INTEGRADA ==================== -->
+  <script>
+    /**
+     * JoViCo Travel IA - Core Application State
+     */
+    const state = {
+      apiKey: '',
+      provider: 'gemini-1.5-flash',
+      destination: 'Cusco',
+      days: 3,
+      budget: 'Moderado',
+      interests: ['Cultura e Historia', 'Gastronomía'],
+      ragDatabase: [], // Registros parseados del CSV
+      retrievedChunks: [], // Chunks encontrados para la consulta actual
+      generatedItinerary: null,
+      isGenerating: false
+    };
+
+    // Dataset turístico de muestra predeterminado (Cusco, Kioto, París)
+    const SAMPLE_CSV_DATA = `Destino,NombreLugar,Categoria,Descripcion,CostoEstimadoUSD,HorarioRecomendado,ConsejosLocales
+Cusco,Templo del Sol (Qorikancha),Cultura e Historia,Antiguo templo inca sobre el que se edificó el convento de Santo Domingo. Muros líticos de precisión milimétrica.,10,09:00 - 11:30,Llevar guía acreditado en la puerta para entender la astronomía inca.
+Cusco,Mercado Central de San Pedro,Gastronomía,Mercado tradicional con frutas exóticas andinas jugos frescos y platos locales como lomo saltado y lechón.,5,12:30 - 14:30,Probar el jugo de chirimoya con naranja y comprar chocolate de Quillabamba.
+Cusco,Fortaleza de Sacsayhuamán,Aventura y Trekking,Complejo ceremonial megalítico con vistas panorámicas increíbles de la ciudad de Cusco.,20,15:00 - 17:30,Requiere el Boleto Turístico de Cusco (BTC). Aclimatar con mate de coca antes de subir.
+Cusco,Barrio de San Blas,Cultura e Historia,Barrio bohemio repleto de talleres de artesanos galerías cafés coloniales y miradores nocturnos.,0,18:30 - 21:00,Visitar el taller de la familia Mendívil y cenar en Pachapapa.
+Kioto,Santuario Fushimi Inari,Cultura e Historia,Miles de puertas torii bermellón que ascienden por el sagrado monte Inari.,0,07:00 - 09:30,Ir al amanecer para evitar aglomeraciones y usar calzado cómodo para el sendero.
+Kioto,Mercado Nishiki,Gastronomía,Conocido como la cocina de Kioto con más de 100 puestos de mariscos brochetas y dulces tradicionales.,15,12:00 - 14:00,No caminar mientras se come; consumir en el área designada de cada puesto.
+Kioto,Bosque de Bambú de Arashiyama,Naturaleza y Paisajes,Altísimos tallos de bambú verde que se mecen con la brisa creando una atmósfera zen única.,0,15:00 - 17:00,Alquilar una bicicleta cerca de la estación de tren para recorrer templos aledaños.
+París,Museo del Louvre y Jardín de Tullerías,Cultura e Historia,El museo de arte más emblemático del mundo albergando la Mona Lisa y esculturas clásicas.,22,09:00 - 13:00,Reservar ticket con horario con al menos dos semanas de antelación.
+París,Barrio de Le Marais,Gastronomía,Distrito histórico famoso por sus panaderías bistrós contemporáneos y el mejor falafel de la Rue des Rosiers.,18,13:30 - 15:30,Probar los éclairs de L'Éclair de Génie y caminar por la Place des Vosges.
+París,Paseo en Barco por el Sena al Atardecer,Relax y Bienestar,Crucero escénico contemplando la Torre Eiffel iluminada y los puentes históricos.,16,19:00 - 20:30,Ubicarse en la cubierta superior para tomar las mejores fotografías panorámicas.`;
+
+    // Función auxiliar para parsear respuestas JSON de LLMs eliminando delimitadores de markdown si existieran
+    function extractJsonFromText(rawText) {
+      if (!rawText) throw new Error("Respuesta vacía del modelo");
+      let cleaned = rawText.trim();
+      if (cleaned.startsWith('```json')) {
+        cleaned = cleaned.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+      } else if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+      }
+      return JSON.parse(cleaned);
+    }
+
+    // Inicialización del DOM
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initEventListeners();
+      // Precargar los datos de prueba en la base de datos RAG para que funcione inmediatamente
+      loadCsvString(SAMPLE_CSV_DATA, "Demo_Destinos_Turisticos.csv");
+      updatePromptInspector();
+    });
+
+    /**
+     * Vinculación de Eventos de la Interfaz
+     */
+    function initEventListeners() {
+      // 1. Selector de Proveedor & Input API Key
+      const apiKeyInput = document.getElementById('apiKeyInput');
+      const modelProvider = document.getElementById('modelProvider');
+      const toggleApiKeyVisibility = document.getElementById('toggleApiKeyVisibility');
+
+      apiKeyInput.addEventListener('input', (e) => {
+        state.apiKey = e.target.value.trim();
+        updateApiStatusIndicator();
+        updatePromptInspector();
+      });
+
+      modelProvider.addEventListener('change', (e) => {
+        state.provider = e.target.value;
+        updatePromptInspector();
+      });
+
+      toggleApiKeyVisibility.addEventListener('click', () => {
+        const isPassword = apiKeyInput.type === 'password';
+        apiKeyInput.type = isPassword ? 'text' : 'password';
+        const iconName = isPassword ? 'eye-off' : 'eye';
+        toggleApiKeyVisibility.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4"></i>`;
+        lucide.createIcons();
+      });
+
+      // 2. Destino y Días
+      const travelDestination = document.getElementById('travelDestination');
+      const travelDays = document.getElementById('travelDays');
+
+      travelDestination.addEventListener('input', (e) => {
+        state.destination = e.target.value.trim() || 'Destino por definir';
+        runRagRetrieval();
+        updatePromptInspector();
+      });
+
+      travelDays.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        state.days = isNaN(val) ? 3 : Math.max(1, Math.min(val, 7));
+        updatePromptInspector();
+      });
+
+      // 3. Presupuesto
+      document.querySelectorAll('.budget-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.budget-btn').forEach(b => {
+            b.classList.remove('active', 'border-brand', 'bg-brand', 'text-white', 'shadow-sm');
+            b.classList.add('border-gray-200', 'text-gray-700');
+          });
+          btn.classList.add('active', 'border-brand', 'bg-brand', 'text-white', 'shadow-sm');
+          btn.classList.remove('border-gray-200', 'text-gray-700');
+          state.budget = btn.getAttribute('data-budget');
+          updatePromptInspector();
+        });
+      });
+
+      // 4. Intereses (Multi-chip toggle)
+      document.querySelectorAll('.badge-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const interest = chip.getAttribute('data-interest');
+          if (chip.classList.contains('active')) {
+            chip.classList.remove('active');
+            state.interests = state.interests.filter(i => i !== interest);
+          } else {
+            chip.classList.add('active');
+            state.interests.push(interest);
+          }
+          runRagRetrieval();
+          updatePromptInspector();
+        });
+      });
+
+      // 5. Módulo RAG: Dropzone y Archivo CSV
+      const csvDropzone = document.getElementById('csvDropzone');
+      const csvFileInput = document.getElementById('csvFileInput');
+      const btnLoadSampleCsv = document.getElementById('btnLoadSampleCsv');
+
+      csvDropzone.addEventListener('click', () => csvFileInput.click());
+
+      csvDropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        csvDropzone.classList.add('border-brand', 'bg-brand-50');
+      });
+
+      csvDropzone.addEventListener('dragleave', () => {
+        csvDropzone.classList.remove('border-brand', 'bg-brand-50');
+      });
+
+      csvDropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        csvDropzone.classList.remove('border-brand', 'bg-brand-50');
+        if (e.dataTransfer.files.length > 0) {
+          handleCsvFile(e.dataTransfer.files[0]);
+        }
+      });
+
+      csvFileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          handleCsvFile(e.target.files[0]);
+        }
+      });
+
+      btnLoadSampleCsv.addEventListener('click', () => {
+        loadCsvString(SAMPLE_CSV_DATA, "Demo_Destinos_Turisticos.csv");
+      });
+
+      // Demo Rápido Botón
+      const btnQuickDemo = document.getElementById('btnQuickDemo');
+      if (btnQuickDemo) {
+        btnQuickDemo.addEventListener('click', () => {
+          loadCsvString(SAMPLE_CSV_DATA, "Demo_Destinos_Turisticos.csv");
+          generateItineraryAction();
+        });
+      }
+
+      // 6. Tabs de Navegación (Itinerario vs Prompt Inspector)
+      const tabItineraryBtn = document.getElementById('tabItineraryBtn');
+      const tabPromptBtn = document.getElementById('tabPromptBtn');
+      const panelItinerary = document.getElementById('panelItinerary');
+      const panelPrompt = document.getElementById('panelPrompt');
+
+      tabItineraryBtn.addEventListener('click', () => {
+        tabItineraryBtn.className = "flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition bg-brand text-white shadow-sm";
+        tabPromptBtn.className = "flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition text-gray-600 hover:text-brand hover:bg-brand-50";
+        panelItinerary.classList.remove('hidden');
+        panelPrompt.classList.add('hidden');
+      });
+
+      tabPromptBtn.addEventListener('click', () => {
+        tabPromptBtn.className = "flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition bg-brand text-white shadow-sm";
+        tabItineraryBtn.className = "flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition text-gray-600 hover:text-brand hover:bg-brand-50";
+        panelPrompt.classList.remove('hidden');
+        panelItinerary.classList.add('hidden');
+        updatePromptInspector();
+      });
+
+      // 7. Copiar Prompt
+      document.getElementById('btnCopyPrompt').addEventListener('click', () => {
+        const promptText = document.getElementById('promptLiveDisplay').innerText;
+        navigator.clipboard.writeText(promptText).then(() => {
+          const btn = document.getElementById('btnCopyPrompt');
+          btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5 text-green-600"></i> Copiado`;
+          lucide.createIcons();
+          setTimeout(() => {
+            btn.innerHTML = `<i data-lucide="copy" class="w-3.5 h-3.5"></i> Copiar Prompt`;
+            lucide.createIcons();
+          }, 2000);
+        });
+      });
+
+      // 8. Botón Generar Itinerario
+      document.getElementById('btnGenerateItinerary').addEventListener('click', generateItineraryAction);
+
+      // 9. Imprimir / Exportar
+      document.getElementById('btnPrintItinerary').addEventListener('click', () => {
+        window.print();
+      });
+    }
+
+    /**
+     * Indicadores Visuales de API Key y Modo
+     */
+    function updateApiStatusIndicator() {
+      const apiKeyBadge = document.getElementById('apiKeyBadge');
+      const navStatusBadge = document.getElementById('navStatusBadge');
+      const navStatusText = document.getElementById('navStatusText');
+
+      if (state.apiKey.length >= 10) {
+        apiKeyBadge.textContent = 'API Key Activa';
+        apiKeyBadge.className = 'text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-medium border border-emerald-200';
+        
+        navStatusBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200';
+        navStatusText.textContent = `Modo: En Vivo (${state.provider === 'gemini-1.5-flash' ? 'Gemini' : 'OpenAI'})`;
+      } else {
+        apiKeyBadge.textContent = 'Sin Clave (Mock Activo)';
+        apiKeyBadge.className = 'text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 font-medium border border-gray-200';
+        
+        navStatusBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200';
+        navStatusText.textContent = 'Modo: Simulación (Mock)';
+      }
+    }
+
+    /**
+     * Procesador CSV mediante PapaParse
+     */
+    function handleCsvFile(file) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          processParsedData(results.data, file.name);
+        },
+        error: function(err) {
+          alert("Error al leer el archivo CSV: " + err.message);
+        }
+      });
+    }
+
+    function loadCsvString(csvString, filename) {
+      Papa.parse(csvString, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          processParsedData(results.data, filename);
+        }
+      });
+    }
+
+    function processParsedData(data, filename) {
+      state.ragDatabase = data;
+      document.getElementById('ragRecordCount').textContent = `${data.length} registros`;
+      
+      const dropzone = document.getElementById('csvDropzone');
+      dropzone.innerHTML = `
+        <div class="flex items-center gap-2 text-brand font-semibold text-xs">
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+          <span>${filename}</span>
+        </div>
+        <span class="text-[10px] text-gray-500">${data.length} destinos cargados en la base de datos RAG en memoria</span>
+      `;
+      lucide.createIcons();
+
+      runRagRetrieval();
+      updatePromptInspector();
+    }
+
+    /**
+     * Algoritmo de Búsqueda RAG (Local Retrieval)
+     * Busca coincidencias léxicas entre el destino, los intereses y las descripciones del CSV.
+     */
+    function runRagRetrieval() {
+      if (!state.ragDatabase || state.ragDatabase.length === 0) {
+        state.retrievedChunks = [];
+        renderRetrievedChunks([]);
+        return;
+      }
+
+      const destTarget = (state.destination || '').toLowerCase().trim();
+      const interestsTarget = state.interests.map(i => i.toLowerCase());
+
+      // Ponderación de relevancia
+      const scoredResults = state.ragDatabase.map(row => {
+        let score = 0;
+        const rowDest = (row.Destino || '').toLowerCase();
+        const rowCat = (row.Categoria || '').toLowerCase();
+        const rowDesc = (row.Descripcion || '').toLowerCase();
+        const rowName = (row.NombreLugar || '').toLowerCase();
+
+        // Coincidencia con el destino buscado
+        if (destTarget && rowDest.includes(destTarget)) score += 50;
+        if (destTarget && rowDesc.includes(destTarget)) score += 15;
+
+        // Coincidencia con intereses seleccionados
+        interestsTarget.forEach(interest => {
+          if (rowCat.includes(interest)) score += 20;
+          if (rowDesc.includes(interest)) score += 10;
+        });
+
+        return { row, score };
+      });
+
+      // Filtrar y ordenar los más relevantes
+      const matched = scoredResults
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map(item => item.row);
+
+      state.retrievedChunks = matched;
+      renderRetrievedChunks(matched);
+    }
+
+    function renderRetrievedChunks(chunks) {
+      const previewContainer = document.getElementById('retrievedChunksPreview');
+      const badge = document.getElementById('chunksRetrievedBadge');
+      badge.textContent = `${chunks.length} recuperados`;
+
+      if (chunks.length === 0) {
+        previewContainer.innerHTML = `
+          <div class="text-xs text-gray-400 italic py-2 text-center bg-[#F6F6F6] rounded-lg border border-dashed border-gray-200">
+            No se hallaron coincidencias exactas en el CSV para "${state.destination}". El modelo usará conocimiento general.
+          </div>
+        `;
+        return;
+      }
+
+      previewContainer.innerHTML = chunks.map((chunk, index) => `
+        <div class="p-2.5 rounded-xl bg-white border border-gray-200 text-xs shadow-xs hover:border-brand-200 transition">
+          <div class="flex items-center justify-between font-bold text-neutralDark">
+            <span class="text-brand flex items-center gap-1">
+              <span class="w-4 h-4 rounded-full bg-brand-50 text-[10px] flex items-center justify-center font-mono">${index + 1}</span>
+              ${chunk.NombreLugar || 'Lugar'}
+            </span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-normal">${chunk.Categoria || 'General'}</span>
+          </div>
+          <p class="text-gray-500 mt-1 line-clamp-2 text-[11px]">${chunk.Descripcion || ''}</p>
+          <div class="flex items-center justify-between mt-1.5 text-[10px] text-gray-400 font-mono">
+            <span>Costo Aprox: $${chunk.CostoEstimadoUSD || 'N/A'} USD</span>
+            <span>Horario: ${chunk.HorarioRecomendado || 'Flexible'}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    /**
+     * CONSTRUCTOR DINÁMICO DE PROMPT (Prompt Builder con CoT)
+     */
+    function buildStructuredPrompt() {
+      const ragContextString = state.retrievedChunks.length > 0
+        ? state.retrievedChunks.map((c, i) => 
+            `[DOC #${i+1}] Lugar: ${c.NombreLugar} | Destino: ${c.Destino} | Categoría: ${c.Categoria} | Costo aprox: $${c.CostoEstimadoUSD} USD | Horario: ${c.HorarioRecomendado} | Descripción: ${c.Descripcion} | Tips: ${c.ConsejosLocales || 'N/A'}`
+          ).join('\n')
+        : "No se encontraron documentos específicos en la base de datos local para este destino. Procede con tu conocimiento general validado.";
+
+      const prompt = `### SYSTEM PROMPT / ROL:
+Eres el Agente Inteligente de JoViCo Travel IA, un Diseñador Experto de Itinerarios Turísticos de Alta Gama e Inteligencia de Viajes. Tu objetivo es crear un plan diario optimizado, geográficamente coherente y alineado a las restricciones del usuario.
+
+### RESTRICCIONES DEL USUARIO:
+- Destino: ${state.destination}
+- Duración: ${state.days} día(s)
+- Nivel de Presupuesto: ${state.budget}
+- Intereses Prioritarios: ${state.interests.length > 0 ? state.interests.join(', ') : 'Cultura, Gastronomía general'}
+
+### CONTEXTO DE CONOCIMIENTO RECUPERADO (RAG LOCAL):
+${ragContextString}
+
+### INSTRUCCIONES CHAIN-OF-THOUGHT (CoT - RAZONAMIENTO PASO A PASO):
+Antes de formular la respuesta final, realiza internamente los siguientes pasos de análisis:
+1. PASO 1 (Análisis de Entorno): Evalúa el destino (${state.destination}) y cruza las actividades de los fragmentos [DOC] del contexto RAG para darles prioridad máxima en el itinerario.
+2. PASO 2 (Coherencia Geográfica): Agrupa las atracciones por cercanía para evitar desplazamientos innecesarios entre la Mañana, la Tarde y la Noche.
+3. PASO 3 (Balance de Ritmo): Respeta el perfil de presupuesto (${state.budget}) en los costos estimados de comidas y accesos.
+4. PASO 4 (Formato Estricto): Genera ÚNICAMENTE un objeto JSON válido, sin bloques de código markdown adicionales fuera de la estructura.
+
+### ESQUEMA JSON OBLIGATORIO:
+{
+  "titulo_viaje": "Título cautivador del itinerario",
+  "resumen": "Resumen ejecutivo del viaje en 2 líneas destacando el valor de la propuesta.",
+  "presupuesto_total_usd": 250,
+  "dias": [
+    {
+      "dia": 1,
+      "titulo_dia": "Tema central del día",
+      "manana": {
+        "lugar": "Nombre de la atracción matutina",
+        "actividad": "Descripción de lo que hará el viajero",
+        "costo_usd": 15,
+        "consejo_experto": "Tip práctico local"
+      },
+      "tarde": {
+        "lugar": "Nombre del lugar o restaurante",
+        "actividad": "Descripción de la actividad vespertina",
+        "costo_usd": 20,
+        "consejo_experto": "Tip práctico local"
+      },
+      "noche": {
+        "lugar": "Cena o mirador nocturno",
+        "actividad": "Actividad nocturna o paseo",
+        "costo_usd": 25,
+        "consejo_experto": "Tip práctico local"
+      }
+    }
+  ],
+  "recomendaciones_clave": [
+    "Consejo 1 sobre transporte o vestimenta",
+    "Consejo 2 sobre reservas o seguridad",
+    "Consejo 3 sobre gastronomía imprescindible"
+  ]
+}`;
+      return prompt;
+    }
+
+    function updatePromptInspector() {
+      const prompt = buildStructuredPrompt();
+      document.getElementById('promptLiveDisplay').textContent = prompt;
+    }
+
+    /**
+     * GENERADOR DE ITINERARIOS (Llamada a API o Mock Engine)
+     */
+    async function generateItineraryAction() {
+      if (state.isGenerating) return;
+
+      const btn = document.getElementById('btnGenerateItinerary');
+      const spinner = document.getElementById('loadingSpinner');
+      
+      state.isGenerating = true;
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+
+      try {
+        let itineraryData = null;
+
+        // Si hay una API Key provista, intenta llamar al endpoint correspondiente
+        if (state.apiKey.length >= 10) {
+          if (state.provider === 'gemini-1.5-flash') {
+            itineraryData = await callGeminiApi(buildStructuredPrompt(), state.apiKey);
+          } else {
+            itineraryData = await callOpenAiApi(buildStructuredPrompt(), state.apiKey);
+          }
+        } else {
+          // Modo Simulación con Mock Data realista basada en el RAG
+          itineraryData = await simulateMockGeneration();
+        }
+
+        state.generatedItinerary = itineraryData;
+        renderItinerary(itineraryData);
+
+        // Cambiar automáticamente a la pestaña de Itinerario
+        document.getElementById('tabItineraryBtn').click();
+
+      } catch (error) {
+        console.error("Fallo de llamada a API, pasando a modo simulación seguro:", error);
+        alert(`Aviso de Inferencia: Ocurrió un error con la API seleccionada (${error.message}). Se mostrará la simulación contextual para garantizar la experiencia.`);
+        const mockFallback = await simulateMockGeneration();
+        renderItinerary(mockFallback);
+        document.getElementById('tabItineraryBtn').click();
+      } finally {
+        state.isGenerating = false;
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+      }
+    }
+
+    /**
+     * Llamada a Google Gemini 1.5 Flash
+     */
+    async function callGeminiApi(prompt, apiKey) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.4,
+          responseMimeType: "application/json"
+        }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      return extractJsonFromText(rawText);
+    }
+
+    /**
+     * Llamada a OpenAI GPT-4o-mini
+     */
+    async function callOpenAiApi(prompt, apiKey) {
+      const endpoint = 'https://api.openai.com/v1/chat/completions';
+      const payload = {
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'Eres un asistente turístico que responde exclusivamente en JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.4
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      return extractJsonFromText(content);
+    }
+
+    /**
+     * Motor de Simulación (Mock Engine Inteligente)
+     * Construye un JSON hiperrealista utilizando los fragmentos RAG y las preferencias.
+     */
+    async function simulateMockGeneration() {
+      // Simular latencia de red (800ms) para una experiencia verosímil
+      await new Promise(r => setTimeout(r, 800));
+
+      const dest = state.destination || 'Cusco';
+      const daysCount = state.days || 3;
+      const budgetFactor = state.budget === 'Lujo' ? 3.5 : (state.budget === 'Económico' ? 0.7 : 1.5);
+      
+      // Tomar lugares del RAG si existen
+      const ragPlaces = state.retrievedChunks;
+      const daysList = [];
+
+      for (let i = 1; i <= daysCount; i++) {
+        const placeMorning = ragPlaces[(i - 1) * 2 % Math.max(1, ragPlaces.length)] || {
+          NombreLugar: `Casco Antiguo y Templo Central de ${dest}`,
+          Descripcion: `Recorrido a pie por las calles históricas y plazas coloniales de ${dest}.`,
+          CostoEstimadoUSD: 12,
+          ConsejosLocales: "Comenzar temprano para evitar filas de turistas."
+        };
+
+        const placeAfternoon = ragPlaces[((i - 1) * 2 + 1) % Math.max(1, ragPlaces.length)] || {
+          NombreLugar: `Mercado Gastronómico y Artesanal de ${dest}`,
+          Descripcion: `Degustación culinaria de platos típicos y recorrido por tiendas de diseñadores locales.`,
+          CostoEstimadoUSD: 18,
+          ConsejosLocales: "Llevar efectivo en moneda local para pequeñas compras."
+        };
+
+        daysList.push({
+          dia: i,
+          titulo_dia: `Día ${i}: Inmersión Cultural y Sabores en ${dest}`,
+          manana: {
+            lugar: placeMorning.NombreLugar,
+            actividad: placeMorning.Descripcion,
+            costo_usd: Math.round(Number(placeMorning.CostoEstimadoUSD || 15) * budgetFactor),
+            consejo_experto: placeMorning.ConsejosLocales || "Llevar calzado deportivo y agua."
+          },
+          tarde: {
+            lugar: placeAfternoon.NombreLugar,
+            actividad: placeAfternoon.Descripcion,
+            costo_usd: Math.round(Number(placeAfternoon.CostoEstimadoUSD || 20) * budgetFactor),
+            consejo_experto: placeAfternoon.ConsejosLocales || "Ideal para tomar fotografías al caer la tarde."
+          },
+          noche: {
+            lugar: `Mirador Nocturno & Bistró Autóctono`,
+            actividad: `Cena maridaje con bebidas tradicionales contemplando las luces nocturnas de la ciudad.`,
+            costo_usd: Math.round(30 * budgetFactor),
+            consejo_experto: "Reservar mesa en terraza con anticipación."
+          }
+        });
+      }
+
+      const totalCost = daysList.reduce((acc, d) => acc + d.manana.costo_usd + d.tarde.costo_usd + d.noche.costo_usd, 0);
+
+      return {
+        titulo_viaje: `Exploración Integral en ${dest}`,
+        resumen: `Itinerario equilibrado de ${daysCount} días optimizado con técnicas de RAG. Prioriza experiencias en ${state.interests.slice(0, 2).join(' y ')} bajo un esquema de presupuesto ${state.budget}.`,
+        presupuesto_total_usd: totalCost,
+        dias: daysList,
+        recomendaciones_clave: [
+          `Descarga los mapas sin conexión de ${dest} para navegar sin consumir datos móviles.`,
+          `Verifica los horarios de museos y templos, ya que varios cierran los días lunes.`,
+          `Reserva con al menos 48 horas de anticipación las experiencias gastronómicas más demandadas.`
+        ]
+      };
+    }
+
+    /**
+     * RENDERIZADO VISUAL DEL ITINERARIO
+     */
+    function renderItinerary(data) {
+      document.getElementById('emptyStateContainer').classList.add('hidden');
+      const container = document.getElementById('itineraryResultContainer');
+      container.classList.remove('hidden');
+
+      // Título y Resumen
+      document.getElementById('itineraryDestinationTitle').textContent = data.titulo_viaje || `Viaje a ${state.destination}`;
+      document.getElementById('itinerarySummaryText').textContent = data.resumen || '';
+      document.getElementById('itineraryBudgetBadge').textContent = state.budget;
+      document.getElementById('itineraryDaysCount').textContent = `${data.dias?.length || state.days} Días`;
+      document.getElementById('itineraryTotalCost').textContent = `$${data.presupuesto_total_usd || 180} USD`;
+      document.getElementById('itineraryRagHits').textContent = `${state.retrievedChunks.length} fuentes RAG`;
+
+      // Tarjetas de Días
+      const daysListContainer = document.getElementById('itineraryDaysList');
+      daysListContainer.innerHTML = (data.dias || []).map(dia => `
+        <div class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition">
+          <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-brand text-white font-black text-xs flex items-center justify-center">
+                D${dia.dia}
+              </span>
+              <h4 class="font-bold text-neutralDark text-sm sm:text-base">${dia.titulo_dia || `Día ${dia.dia}`}</h4>
+            </div>
+            <span class="text-xs font-mono font-semibold text-gray-500">
+              Aprox: $${(dia.manana?.costo_usd || 0) + (dia.tarde?.costo_usd || 0) + (dia.noche?.costo_usd || 0)} USD
+            </span>
+          </div>
+
+          <!-- 3 Franjas Horarias: Mañana, Tarde, Noche -->
+          <div class="space-y-3">
+            
+            <!-- Mañana -->
+            <div class="flex items-start gap-3 p-3 rounded-xl bg-[#F6F6F6] border border-gray-100">
+              <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                <i data-lucide="sunrise" class="w-4 h-4"></i>
+              </div>
+              <div class="flex-grow">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-amber-800">Mañana</span>
+                  <span class="text-[11px] font-mono text-gray-500 font-semibold">$${dia.manana?.costo_usd || 0} USD</span>
+                </div>
+                <h5 class="font-bold text-xs text-neutralDark mt-0.5">${dia.manana?.lugar || 'Actividad Matutina'}</h5>
+                <p class="text-xs text-gray-600 mt-0.5 leading-relaxed">${dia.manana?.actividad || ''}</p>
+                ${dia.manana?.consejo_experto ? `
+                  <div class="mt-2 text-[10px] text-brand-dark bg-brand-50 p-1.5 rounded-lg border border-brand-100 flex items-center gap-1.5">
+                    <i data-lucide="info" class="w-3 h-3 text-brand shrink-0"></i>
+                    <span><strong>Tip:</strong> ${dia.manana.consejo_experto}</span>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+
+            <!-- Tarde -->
+            <div class="flex items-start gap-3 p-3 rounded-xl bg-[#F6F6F6] border border-gray-100">
+              <div class="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center shrink-0 mt-0.5">
+                <i data-lucide="sun" class="w-4 h-4"></i>
+              </div>
+              <div class="flex-grow">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-orange-800">Tarde</span>
+                  <span class="text-[11px] font-mono text-gray-500 font-semibold">$${dia.tarde?.costo_usd || 0} USD</span>
+                </div>
+                <h5 class="font-bold text-xs text-neutralDark mt-0.5">${dia.tarde?.lugar || 'Actividad Vespertina'}</h5>
+                <p class="text-xs text-gray-600 mt-0.5 leading-relaxed">${dia.tarde?.actividad || ''}</p>
+                ${dia.tarde?.consejo_experto ? `
+                  <div class="mt-2 text-[10px] text-brand-dark bg-brand-50 p-1.5 rounded-lg border border-brand-100 flex items-center gap-1.5">
+                    <i data-lucide="info" class="w-3 h-3 text-brand shrink-0"></i>
+                    <span><strong>Tip:</strong> ${dia.tarde.consejo_experto}</span>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+
+            <!-- Noche -->
+            <div class="flex items-start gap-3 p-3 rounded-xl bg-[#F6F6F6] border border-gray-100">
+              <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 mt-0.5">
+                <i data-lucide="moon" class="w-4 h-4"></i>
+              </div>
+              <div class="flex-grow">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-indigo-800">Noche</span>
+                  <span class="text-[11px] font-mono text-gray-500 font-semibold">$${dia.noche?.costo_usd || 0} USD</span>
+                </div>
+                <h5 class="font-bold text-xs text-neutralDark mt-0.5">${dia.noche?.lugar || 'Cena & Paseo Nocturno'}</h5>
+                <p class="text-xs text-gray-600 mt-0.5 leading-relaxed">${dia.noche?.actividad || ''}</p>
+                ${dia.noche?.consejo_experto ? `
+                  <div class="mt-2 text-[10px] text-brand-dark bg-brand-50 p-1.5 rounded-lg border border-brand-100 flex items-center gap-1.5">
+                    <i data-lucide="info" class="w-3 h-3 text-brand shrink-0"></i>
+                    <span><strong>Tip:</strong> ${dia.noche.consejo_experto}</span>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      `).join('');
+
+      // Recomendaciones clave
+      const tipsList = document.getElementById('itineraryTipsList');
+      tipsList.innerHTML = (data.recomendaciones_clave || []).map(tip => `
+        <li class="leading-relaxed">${tip}</li>
+      `).join('');
+
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>
